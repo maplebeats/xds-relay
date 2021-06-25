@@ -6,6 +6,7 @@ import (
 
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	gcpv3 "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
+	"github.com/envoyproxy/go-control-plane/pkg/server/stream/v3"
 	"github.com/envoyproxy/xds-relay/internal/app/transport"
 )
 
@@ -16,7 +17,7 @@ type V3 struct {
 	orchestrator Orchestrator
 }
 
-// NewV3 creates a shared cache for v2 requests
+// NewV3 creates a shared cache for v3 requests
 func NewV3(o Orchestrator) *V3 {
 	return &V3{
 		orchestrator: o,
@@ -33,4 +34,9 @@ func (v *V3) CreateWatch(r *gcpv3.Request) (chan gcpv3.Response, func()) {
 // Fetch implements the polling method of the config cache using a non-empty request.
 func (v *V3) Fetch(context.Context, *discovery.DiscoveryRequest) (gcpv3.Response, error) {
 	return nil, fmt.Errorf("Not implemented")
+}
+
+// CreateDeltaWatch is the grpc backed xds handler
+func (v V3) CreateDeltaWatch(*discovery.DeltaDiscoveryRequest, *stream.StreamState) (value chan gcpv3.DeltaResponse, cancel func()) {
+	return nil, nil
 }

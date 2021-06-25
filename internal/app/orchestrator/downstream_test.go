@@ -14,7 +14,7 @@ package orchestrator
 import (
 	"testing"
 
-	gcp "github.com/envoyproxy/go-control-plane/pkg/cache/v2"
+	gcp "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	"github.com/envoyproxy/xds-relay/internal/app/cache"
 	"github.com/envoyproxy/xds-relay/internal/app/transport"
 	"github.com/envoyproxy/xds-relay/internal/pkg/stats"
@@ -23,7 +23,7 @@ import (
 
 var (
 	mockRequest = gcp.Request{
-		TypeUrl: "type.googleapis.com/envoy.api.v2.Listener",
+		TypeUrl: "type.googleapis.com/envoy.config.listener.v3.Listener",
 	}
 	mockScope = stats.NewMockScope("mockDownstream")
 )
@@ -31,13 +31,13 @@ var (
 func Test_downstreamResponseMap_createWatch(t *testing.T) {
 	responseMap := newDownstreamResponseMap()
 	assert.Equal(t, 0, len(responseMap.watches))
-	responseMap.createWatch(transport.NewRequestV2(&mockRequest), mockScope)
+	responseMap.createWatch(transport.NewRequestV3(&mockRequest), mockScope)
 	assert.Equal(t, 1, len(responseMap.watches))
 }
 
 func Test_downstreamResponseMap_get(t *testing.T) {
 	responseMap := newDownstreamResponseMap()
-	request := transport.NewRequestV2(&mockRequest)
+	request := transport.NewRequestV3(&mockRequest)
 	responseMap.createWatch(request, mockScope)
 	assert.Equal(t, 1, len(responseMap.watches))
 	if _, ok := responseMap.get(request); !ok {
@@ -47,9 +47,9 @@ func Test_downstreamResponseMap_get(t *testing.T) {
 
 func Test_downstreamResponseMap_delete(t *testing.T) {
 	responseMap := newDownstreamResponseMap()
-	request := transport.NewRequestV2(&mockRequest)
-	request2 := transport.NewRequestV2(&gcp.Request{
-		TypeUrl: "type.googleapis.com/envoy.api.v2.Cluster",
+	request := transport.NewRequestV3(&mockRequest)
+	request2 := transport.NewRequestV3(&gcp.Request{
+		TypeUrl: "type.googleapis.com/envoy.config.cluster.v3.Cluster",
 	})
 	responseMap.createWatch(request, mockScope)
 	responseMap.createWatch(request2, mockScope)
@@ -71,12 +71,12 @@ func Test_downstreamResponseMap_delete(t *testing.T) {
 
 func Test_downstreamResponseMap_deleteAll(t *testing.T) {
 	responseMap := newDownstreamResponseMap()
-	request := transport.NewRequestV2(&mockRequest)
-	request2 := transport.NewRequestV2(&gcp.Request{
-		TypeUrl: "type.googleapis.com/envoy.api.v2.Cluster",
+	request := transport.NewRequestV3(&mockRequest)
+	request2 := transport.NewRequestV3(&gcp.Request{
+		TypeUrl: "type.googleapis.com/envoy.config.cluster.v3.Cluster",
 	})
-	request3 := transport.NewRequestV2(&gcp.Request{
-		TypeUrl: "type.googleapis.com/envoy.api.v2.RouteConfiguration",
+	request3 := transport.NewRequestV3(&gcp.Request{
+		TypeUrl: "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
 	})
 	responseMap.createWatch(request, mockScope)
 	responseMap.createWatch(request2, mockScope)
