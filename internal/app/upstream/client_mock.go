@@ -33,6 +33,21 @@ func NewMockClientV3(
 	}
 }
 
+// NewMockClientEDS creates a mock implementation for testing for v3 eds
+func NewMockClientEDS(
+	ctx context.Context,
+	edsClientV3 endpointservice.EndpointDiscoveryServiceClient,
+	callOptions CallOptions,
+	scope tally.Scope) Client {
+	return &client{
+		edsClientV3: edsClientV3,
+		callOptions: callOptions,
+		logger:      log.MockLogger,
+		scope:       scope,
+		shutdown:    make(<-chan struct{}),
+	}
+}
+
 // NewMockV3 creates a mock client implementation for testing
 func NewMockV3(
 	ctx context.Context,
@@ -50,6 +65,22 @@ func NewMockV3(
 		createMockRdsClientV3(errorOnCreate, rdsReceiveChan, sendCb),
 		createMockEdsClientV3(errorOnCreate, edsReceiveChan, sendCb),
 		createMockCdsClientV3(errorOnCreate, cdsReceiveChan, sendCb),
+		callOptions,
+		scope,
+	)
+}
+
+// NewMockEDS creates a mock client implementation for testing v3 eds
+func NewMockEDS(
+	ctx context.Context,
+	callOptions CallOptions,
+	errorOnCreate []error,
+	edsReceiveChanV3 chan *discoveryv3.DiscoveryResponse,
+	sendCb func(m interface{}) error,
+	scope tally.Scope) Client {
+	return NewMockClientEDS(
+		ctx,
+		createMockEdsClientV3(errorOnCreate, edsReceiveChanV3, sendCb),
 		callOptions,
 		scope,
 	)

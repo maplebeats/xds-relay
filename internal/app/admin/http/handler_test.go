@@ -8,8 +8,9 @@ import (
 	"net/url"
 	"testing"
 
-	v2 "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	gcp "github.com/envoyproxy/go-control-plane/pkg/cache/v2"
+	listenerv3 "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	gcp "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	"github.com/envoyproxy/xds-relay/internal/app/transport"
 	"github.com/envoyproxy/xds-relay/internal/pkg/log"
 	bootstrapv1 "github.com/envoyproxy/xds-relay/pkg/api/bootstrap/v1"
@@ -193,7 +194,7 @@ func TestAdminServer_LogLevelHandler_GetLevel(t *testing.T) {
 }
 
 func TestMarshalResources(t *testing.T) {
-	listener := &v2.Listener{
+	listener := &listenerv3.Listener{
 		Name: "lds resource",
 	}
 	listenerAny, err := ptypes.MarshalAny(listener)
@@ -203,25 +204,25 @@ func TestMarshalResources(t *testing.T) {
 	})
 	assert.NotNil(t, marshalled)
 	assert.Equal(t, 1, len(marshalled.Listeners))
-	assert.Equal(t, "lds resource", marshalled.Listeners[0].(*v2.Listener).Name)
+	assert.Equal(t, "lds resource", marshalled.Listeners[0].(*listenerv3.Listener).Name)
 }
 
 func TestMarshalDiscoveryResponse(t *testing.T) {
-	listener := &v2.Listener{
+	listener := &listenerv3.Listener{
 		Name: "lds resource",
 	}
 	listenerAny, err := ptypes.MarshalAny(listener)
 	assert.NoError(t, err)
-	resp := v2.DiscoveryResponse{
+	resp := discoveryv3.DiscoveryResponse{
 		VersionInfo: "1",
-		TypeUrl:     "type.googleapis.com/envoy.api.v2.Listener",
+		TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
 		Resources: []*any.Any{
 			listenerAny,
 		},
 	}
-	marshalled := marshalDiscoveryResponse(transport.NewResponseV2(&gcp.Request{}, &resp))
+	marshalled := marshalDiscoveryResponse(transport.NewResponseV3(&gcp.Request{}, &resp))
 	assert.NotNil(t, marshalled)
 	assert.Equal(t, resp.VersionInfo, marshalled.VersionInfo)
 	assert.Equal(t, resp.TypeUrl, marshalled.TypeURL)
-	assert.Equal(t, listener.Name, marshalled.Resources.Listeners[0].(*v2.Listener).Name)
+	assert.Equal(t, listener.Name, marshalled.Resources.Listeners[0].(*listenerv3.Listener).Name)
 }

@@ -5,11 +5,10 @@ import (
 	"testing"
 	"time"
 
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/envoyproxy/xds-relay/internal/app/transport"
 	"github.com/envoyproxy/xds-relay/internal/pkg/stats"
-
-	v2 "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	core "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/golang/groupcache/lru"
 	"github.com/golang/protobuf/ptypes/any"
 	"github.com/onsi/gomega"
@@ -36,7 +35,7 @@ func testOnEvict(key string, value Resource) {
 	})
 }
 
-var testRequestA = v2.DiscoveryRequest{
+var testRequestA = discoveryv3.DiscoveryRequest{
 	VersionInfo: "version_A",
 	Node: &core.Node{
 		Id:      "id_A",
@@ -47,7 +46,7 @@ var testRequestA = v2.DiscoveryRequest{
 	ResponseNonce: "nonce_A",
 }
 
-var testRequestB = v2.DiscoveryRequest{
+var testRequestB = discoveryv3.DiscoveryRequest{
 	VersionInfo: "version_B",
 	Node: &core.Node{
 		Id:      "id_B",
@@ -58,7 +57,7 @@ var testRequestB = v2.DiscoveryRequest{
 	ResponseNonce: "nonce_B",
 }
 
-var testDiscoveryResponse = v2.DiscoveryResponse{
+var testDiscoveryResponse = discoveryv3.DiscoveryResponse{
 	VersionInfo: "version_A",
 	Resources: []*any.Any{
 		{
@@ -74,7 +73,7 @@ var testDiscoveryResponse = v2.DiscoveryResponse{
 }
 
 var testResource = Resource{
-	Resp:     transport.NewResponseV2(&v2.DiscoveryRequest{}, &testDiscoveryResponse),
+	Resp:     transport.NewResponseV3(&discoveryv3.DiscoveryRequest{}, &testDiscoveryResponse),
 	Requests: NewRequestsStore(),
 }
 
@@ -92,7 +91,7 @@ func TestAddRequestAndFetch(t *testing.T) {
 	assert.EqualError(t, err, "no value found for key: key_A")
 	assert.Nil(t, resource)
 
-	err = cache.AddRequest(testKeyA, transport.NewRequestV2(&testRequestA))
+	err = cache.AddRequest(testKeyA, transport.NewRequestV3(&testRequestA))
 	assert.NoError(t, err)
 	countersSnapshot = mockScope.Snapshot().Counters()
 	assert.EqualValues(
@@ -125,18 +124,18 @@ func TestSetResponseAndFetch(t *testing.T) {
 
 	resource, err = cache.Fetch(testKeyA)
 	assert.NoError(t, err)
-	assert.Equal(t, &testDiscoveryResponse, resource.Resp.Get().V2)
+	assert.Equal(t, &testDiscoveryResponse, resource.Resp.Get().V3)
 }
 
 func TestAddRequestAndSetResponse(t *testing.T) {
 	cache, err := NewCache(2, testOnEvict, time.Second*60, log.MockLogger, stats.NewMockScope("cache"))
 	assert.NoError(t, err)
 
-	reqA := transport.NewRequestV2(&testRequestA)
+	reqA := transport.NewRequestV3(&testRequestA)
 	err = cache.AddRequest(testKeyA, reqA)
 	assert.NoError(t, err)
 
-	reqB := transport.NewRequestV2(&testRequestB)
+	reqB := transport.NewRequestV3(&testRequestB)
 	err = cache.AddRequest(testKeyA, reqB)
 	assert.NoError(t, err)
 
@@ -150,7 +149,7 @@ func TestAddRequestAndSetResponse(t *testing.T) {
 
 	resource, err := cache.Fetch(testKeyA)
 	assert.NoError(t, err)
-	assert.Equal(t, &testDiscoveryResponse, resource.Resp.Get().V2)
+	assert.Equal(t, &testDiscoveryResponse, resource.Resp.Get().V3)
 }
 
 func TestMaxEntries(t *testing.T) {
@@ -162,13 +161,13 @@ func TestMaxEntries(t *testing.T) {
 
 	resource, err := cache.Fetch(testKeyA)
 	assert.NoError(t, err)
-	assert.Equal(t, &testDiscoveryResponse, resource.Resp.Get().V2)
+	assert.Equal(t, &testDiscoveryResponse, resource.Resp.Get().V3)
 
 	assert.PanicsWithValue(t, panicValues{
 		key:    testKeyA,
 		reason: "testOnEvict called",
 	}, func() {
-		err = cache.AddRequest(testKeyB, transport.NewRequestV2(&testRequestB))
+		err = cache.AddRequest(testKeyB, transport.NewRequestV3(&testRequestB))
 		assert.NoError(t, err)
 	})
 
@@ -190,7 +189,7 @@ func TestTTL_Enabled(t *testing.T) {
 
 	resource, err := cache.Fetch(testKeyA)
 	assert.NoError(t, err)
-	assert.Equal(t, &testDiscoveryResponse, resource.Resp.Get().V2)
+	assert.Equal(t, &testDiscoveryResponse, resource.Resp.Get().V3)
 
 	time.Sleep(time.Millisecond * 10)
 	assert.PanicsWithValue(t, panicValues{
@@ -217,7 +216,7 @@ func TestTTL_Disabled(t *testing.T) {
 
 	resource, err := cache.Fetch(testKeyA)
 	assert.NoError(t, err)
-	assert.Equal(t, &testDiscoveryResponse, resource.Resp.Get().V2)
+	assert.Equal(t, &testDiscoveryResponse, resource.Resp.Get().V3)
 
 	gomega.Consistently(func() (*Resource, error) {
 		return cache.Fetch(testKeyA)
@@ -260,7 +259,7 @@ func TestDeleteRequest(t *testing.T) {
 	cache, err := NewCache(1, testOnEvict, time.Second*60, log.MockLogger, stats.NewMockScope("cache"))
 	assert.NoError(t, err)
 
-	reqA := transport.NewRequestV2(&testRequestA)
+	reqA := transport.NewRequestV3(&testRequestA)
 	err = cache.AddRequest(testKeyA, reqA)
 	assert.NoError(t, err)
 
@@ -274,7 +273,7 @@ func TestDeleteRequest(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 0, getLength(requests))
 
-	err = cache.DeleteRequest(testKeyB, transport.NewRequestV2(&testRequestB))
+	err = cache.DeleteRequest(testKeyB, transport.NewRequestV3(&testRequestB))
 	assert.NoError(t, err)
 }
 
@@ -282,7 +281,7 @@ func TestDeleteKey(t *testing.T) {
 	cache, err := NewCache(1, testOnEvict, time.Second*60, log.MockLogger, stats.NewMockScope("cache"))
 	assert.NoError(t, err)
 
-	reqA := transport.NewRequestV2(&testRequestA)
+	reqA := transport.NewRequestV3(&testRequestA)
 	err = cache.AddRequest(testKeyA, reqA)
 	assert.NoError(t, err)
 

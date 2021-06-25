@@ -12,12 +12,10 @@ import (
 	"syscall"
 	"time"
 
-	api "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	clusterservice "github.com/envoyproxy/go-control-plane/envoy/service/cluster/v3"
 	endpointservice "github.com/envoyproxy/go-control-plane/envoy/service/endpoint/v3"
 	listenerservice "github.com/envoyproxy/go-control-plane/envoy/service/listener/v3"
 	routeservice "github.com/envoyproxy/go-control-plane/envoy/service/route/v3"
-	gcpv2 "github.com/envoyproxy/go-control-plane/pkg/server/v2"
 	gcpv3 "github.com/envoyproxy/go-control-plane/pkg/server/v3"
 	"github.com/uber-go/tally"
 	"google.golang.org/grpc"
@@ -198,12 +196,6 @@ func startServer(ctx context.Context, logger log.Logger, scope tally.Scope,
 }
 
 func registerEndpoints(ctx context.Context, g *grpc.Server, o orchestrator.Orchestrator) {
-	gcpv2 := gcpv2.NewServer(ctx, orchestrator.NewV2(o), nil)
-	api.RegisterRouteDiscoveryServiceServer(g, gcpv2)
-	api.RegisterClusterDiscoveryServiceServer(g, gcpv2)
-	api.RegisterEndpointDiscoveryServiceServer(g, gcpv2)
-	api.RegisterListenerDiscoveryServiceServer(g, gcpv2)
-
 	gcpv3 := gcpv3.NewServer(ctx, orchestrator.NewV3(o), nil)
 	routeservice.RegisterRouteDiscoveryServiceServer(g, gcpv3)
 	clusterservice.RegisterClusterDiscoveryServiceServer(g, gcpv3)
