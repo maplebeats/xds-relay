@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"strings"
 
-	v2 "github.com/envoyproxy/go-control-plane/pkg/resource/v2"
 	v3 "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	"github.com/envoyproxy/xds-relay/internal/app/metrics"
 	"github.com/envoyproxy/xds-relay/internal/app/transport"
@@ -94,7 +93,7 @@ func (mapper *mapper) GetKey(request transport.Request) (string, error) {
 }
 
 func isEDS(typeURL string) bool {
-	return v2.EndpointType == typeURL || v3.EndpointType == typeURL
+	return v3.EndpointType == typeURL
 }
 
 func isMatch(matchPredicate *matchPredicate, typeURL string, req transport.Request) (bool, error) {
