@@ -8,11 +8,8 @@ import (
 	"testing"
 	"time"
 
-	v2 "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	core "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	"github.com/envoyproxy/go-control-plane/pkg/resource/v2"
 	resourcev3 "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	"github.com/envoyproxy/xds-relay/internal/app/transport"
 	"github.com/envoyproxy/xds-relay/internal/pkg/stats"
@@ -25,18 +22,6 @@ import (
 func TestMain(m *testing.M) {
 	defer goleak.VerifyTestMain(m)
 }
-
-func TestOpenStreamShouldReturnErrorForInvalidTypeUrl(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	client := createMockClient(ctx)
-
-	respCh, done := client.OpenStream(transport.NewRequestV2(&v2.DiscoveryRequest{}), "aggregated_key")
-	defer done()
-	_, ok := <-respCh
-	assert.False(t, ok)
-}
-
 func TestOpenStreamShouldReturnErrorForInvalidTypeUrlV3(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -47,43 +32,6 @@ func TestOpenStreamShouldReturnErrorForInvalidTypeUrlV3(t *testing.T) {
 	_, ok := <-respCh
 	assert.False(t, ok)
 }
-
-func TestOpenStreamShouldRetryOnStreamCreationFailure(t *testing.T) {
-	scope := stats.NewMockScope("mock")
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	client := createMockClientWithError(ctx, scope)
-
-	typeURLs := map[string][]string{
-		resource.ListenerType: {"mock.lds.stream_failure+key=aggregated_key", "mock.lds.stream_opened+key=aggregated_key"},
-		resource.ClusterType:  {"mock.cds.stream_failure+key=aggregated_key", "mock.cds.stream_opened+key=aggregated_key"},
-		resource.RouteType:    {"mock.rds.stream_failure+key=aggregated_key", "mock.rds.stream_opened+key=aggregated_key"},
-		resource.EndpointType: {"mock.eds.stream_failure+key=aggregated_key", "mock.eds.stream_opened+key=aggregated_key"},
-	}
-	for url, stats := range typeURLs {
-		t.Run(url, func(t *testing.T) {
-			respCh, done := client.OpenStream(
-				transport.NewRequestV2(&v2.DiscoveryRequest{
-					TypeUrl: url,
-					Node:    &core.Node{},
-				}), "aggregated_key")
-			assert.NotNil(t, respCh)
-			for {
-				if v, ok := scope.Snapshot().Counters()[stats[0]]; ok && v.Value() == 1 {
-					break
-				}
-			}
-			for {
-				if v, ok := scope.Snapshot().Counters()[stats[1]]; ok && v.Value() != 0 {
-					break
-				}
-			}
-			done()
-			blockUntilClean(respCh, func() {})
-		})
-	}
-}
-
 func TestOpenStreamShouldRetryOnStreamCreationFailureV3(t *testing.T) {
 	scope := stats.NewMockScope("mock")
 	ctx, cancel := context.WithCancel(context.Background())
@@ -120,22 +68,6 @@ func TestOpenStreamShouldRetryOnStreamCreationFailureV3(t *testing.T) {
 	}
 }
 
-func TestOpenStreamShouldReturnNonEmptyResponseChannel(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	client := createMockClient(ctx)
-
-	respCh, done := client.OpenStream(
-		transport.NewRequestV2(&v2.DiscoveryRequest{
-			TypeUrl: resource.ListenerType,
-			Node:    &core.Node{},
-		}), "aggregated_key")
-	assert.NotNil(t, respCh)
-
-	done()
-	cancel()
-	blockUntilClean(respCh, func() {})
-}
-
 func TestOpenStreamShouldReturnNonEmptyResponseChannelV3(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	client := createMockClientV3(ctx)
@@ -150,49 +82,6 @@ func TestOpenStreamShouldReturnNonEmptyResponseChannelV3(t *testing.T) {
 	done()
 	cancel()
 	blockUntilClean(respCh, func() {})
-}
-
-func TestOpenStreamShouldSendTheFirstRequestToOriginServer(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	var message *v2.DiscoveryRequest
-	responseChan := make(chan *v2.DiscoveryResponse)
-	wait := make(chan bool)
-	var first int32 = 0
-	client := NewMock(
-		ctx,
-		CallOptions{
-			SendTimeout:   time.Nanosecond,
-			StreamTimeout: 0 * time.Second,
-		},
-		nil,
-		responseChan,
-		responseChan,
-		responseChan,
-		responseChan,
-		func(m interface{}) error {
-			message = m.(*v2.DiscoveryRequest)
-			if atomic.CompareAndSwapInt32(&first, 0, 1) {
-				close(wait)
-			}
-			return nil
-		},
-		stats.NewMockScope("mock"),
-	)
-
-	node := &core.Node{}
-	resp, done := client.OpenStream(
-		transport.NewRequestV2(&v2.DiscoveryRequest{
-			TypeUrl: resource.ListenerType,
-			Node:    node,
-		}), "aggregated_key")
-	<-wait
-	assert.NotNil(t, message)
-	assert.Equal(t, message.GetNode(), node)
-	assert.Equal(t, message.GetTypeUrl(), resource.ListenerType)
-
-	done()
-	cancel()
-	blockUntilClean(resp, func() {})
 }
 
 func TestOpenStreamShouldSendTheFirstRequestToOriginServerV3(t *testing.T) {
@@ -233,52 +122,6 @@ func TestOpenStreamShouldSendTheFirstRequestToOriginServerV3(t *testing.T) {
 	assert.NotNil(t, message)
 	assert.Equal(t, message.GetNode(), node)
 	assert.Equal(t, message.GetTypeUrl(), resourcev3.ListenerType)
-
-	done()
-	cancel()
-	blockUntilClean(resp, func() {})
-}
-
-func TestOpenStreamShouldClearNackFromRequestInTheFirstRequestToOriginServer(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	var message *v2.DiscoveryRequest
-	responseChan := make(chan *v2.DiscoveryResponse)
-	wait := make(chan bool)
-	first := true
-	client := NewMock(
-		ctx,
-		CallOptions{
-			SendTimeout:   time.Nanosecond,
-			StreamTimeout: 0 * time.Second,
-		},
-		nil,
-		responseChan,
-		responseChan,
-		responseChan,
-		responseChan,
-		func(m interface{}) error {
-			message = m.(*v2.DiscoveryRequest)
-			if first {
-				close(wait)
-				first = false
-			}
-			return nil
-		},
-		stats.NewMockScope("mock"),
-	)
-
-	node := &core.Node{}
-	resp, done := client.OpenStream(
-		transport.NewRequestV2(&v2.DiscoveryRequest{
-			TypeUrl:     resource.ListenerType,
-			Node:        node,
-			ErrorDetail: &status.Status{Message: "message", Code: 1},
-		}), "aggregated_key")
-	<-wait
-	assert.NotNil(t, message)
-	assert.Equal(t, message.GetNode(), node)
-	assert.Equal(t, message.GetTypeUrl(), resource.ListenerType)
-	assert.Nil(t, message.GetErrorDetail())
 
 	done()
 	cancel()
@@ -329,75 +172,6 @@ func TestOpenStreamShouldClearNackFromRequestInTheFirstRequestToOriginServerV3(t
 	done()
 	cancel()
 	blockUntilClean(resp, func() {})
-}
-
-func TestOpenStreamShouldRetryIfSendFails(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	responseChan := make(chan *v2.DiscoveryResponse)
-	sendError := fmt.Errorf("")
-	errResp := true
-	response := &v2.DiscoveryResponse{}
-	scope := stats.NewMockScope("mock")
-	client := createMockClientWithResponse(ctx, time.Second, 0*time.Second, responseChan, func(m interface{}) error {
-		if errResp {
-			errResp = false
-			return sendError
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
-			responseChan <- response
-			return nil
-		}
-	}, scope)
-
-	resp, done := client.OpenStream(
-		transport.NewRequestV2(&v2.DiscoveryRequest{
-			TypeUrl: resource.ListenerType,
-			Node:    &core.Node{},
-		}), "aggregated_key")
-	defer done()
-	_, more := <-resp
-	assert.True(t, more)
-	assert.Equal(t, int64(1), scope.Snapshot().Counters()["mock.lds.stream_retry+key=aggregated_key"].Value())
-
-	done()
-	cancel()
-	blockUntilClean(resp, func() {
-		close(responseChan)
-	})
-}
-
-func TestStreamShouldRetryWhenTimeoutMet(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	responseChan := make(chan *v2.DiscoveryResponse)
-	scope := stats.NewMockScope("mock")
-	client := createMockClientWithResponse(ctx, time.Second, 1*time.Second, responseChan, func(m interface{}) error {
-		return nil
-	}, scope)
-
-	_, done := client.OpenStream(
-		transport.NewRequestV2(&v2.DiscoveryRequest{
-			TypeUrl: resource.ListenerType,
-			Node:    &core.Node{},
-		}), "aggregated_key")
-	defer done()
-	for start := time.Now(); ; {
-		var val int64 = 0
-		if scope.Snapshot().Counters() != nil &&
-			scope.Snapshot().Counters()["mock.lds.stream_retry+key=aggregated_key"] != nil {
-			val = scope.Snapshot().Counters()["mock.lds.stream_retry+key=aggregated_key"].Value()
-		}
-		if val > 0 {
-			break
-		}
-		if time.Since(start) >= time.Second*5 {
-			t.Fail()
-			break
-		}
-	}
-	cancel()
 }
 
 func TestStreamShouldRetryWhenTimeoutMetV3(t *testing.T) {
@@ -468,36 +242,6 @@ func TestOpenStreamShouldRetryIfSendFailsV3(t *testing.T) {
 	})
 }
 
-func TestOpenStreamShouldSendTheResponseOnTheChannel(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	responseChan := make(chan *v2.DiscoveryResponse)
-	response := &v2.DiscoveryResponse{}
-	client := createMockClientWithResponse(ctx, time.Second, 0*time.Second, responseChan, func(m interface{}) error {
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
-			responseChan <- response
-			return nil
-		}
-	}, stats.NewMockScope("mock"))
-
-	resp, done := client.OpenStream(
-		transport.NewRequestV2(&v2.DiscoveryRequest{
-			TypeUrl: resource.ListenerType,
-			Node:    &core.Node{},
-		}), "aggregated_key")
-	assert.NotNil(t, resp)
-	val := <-resp
-	assert.Equal(t, val.Get().V2, response)
-
-	done()
-	cancel()
-	blockUntilClean(resp, func() {
-		close(responseChan)
-	})
-}
-
 func TestOpenStreamShouldSendTheResponseOnTheChannelV3(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	responseChan := make(chan *discoveryv3.DiscoveryResponse)
@@ -528,58 +272,6 @@ func TestOpenStreamShouldSendTheResponseOnTheChannelV3(t *testing.T) {
 	})
 }
 
-func TestOpenStreamShouldSendTheNextRequestWithUpdatedVersionAndNonce(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	responseChan := make(chan *v2.DiscoveryResponse)
-	lastAppliedVersion := ""
-	index := 0
-	client := createMockClientWithResponse(ctx, time.Second, 0*time.Second, responseChan, func(m interface{}) error {
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
-		}
-		message := m.(*v2.DiscoveryRequest)
-
-		assert.Equal(t, message.GetVersionInfo(), lastAppliedVersion)
-		assert.Equal(t, message.GetResponseNonce(), lastAppliedVersion)
-
-		response := &v2.DiscoveryResponse{
-			VersionInfo: strconv.Itoa(index),
-			Nonce:       strconv.Itoa(index),
-			TypeUrl:     resource.ListenerType,
-		}
-		lastAppliedVersion = strconv.Itoa(index)
-		index++
-		select {
-		case responseChan <- response:
-		case <-ctx.Done():
-			return nil
-		}
-
-		return nil
-	}, stats.NewMockScope("mock"))
-
-	resp, done := client.OpenStream(
-		transport.NewRequestV2(&v2.DiscoveryRequest{
-			TypeUrl: resource.ListenerType,
-			Node:    &core.Node{},
-		}), "aggregated_key")
-	defer done()
-	assert.NotNil(t, resp)
-	for i := 0; i < 5; i++ {
-		val := <-resp
-		assert.Equal(t, val.GetPayloadVersion(), strconv.Itoa(i))
-		assert.Equal(t, val.GetNonce(), strconv.Itoa(i))
-	}
-
-	done()
-	cancel()
-	blockUntilClean(resp, func() {
-		close(responseChan)
-	})
-}
-
 func TestOpenStreamShouldSendTheNextRequestWithUpdatedVersionAndNonceV3(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	responseChan := make(chan *discoveryv3.DiscoveryResponse)
@@ -599,7 +291,7 @@ func TestOpenStreamShouldSendTheNextRequestWithUpdatedVersionAndNonceV3(t *testi
 		response := &discoveryv3.DiscoveryResponse{
 			VersionInfo: strconv.Itoa(index),
 			Nonce:       strconv.Itoa(index),
-			TypeUrl:     resource.ListenerType,
+			TypeUrl:     resourcev3.ListenerType,
 		}
 		lastAppliedVersion = strconv.Itoa(index)
 		index++
@@ -628,38 +320,6 @@ func TestOpenStreamShouldSendTheNextRequestWithUpdatedVersionAndNonceV3(t *testi
 	blockUntilClean(resp, func() {
 		close(responseChan)
 	})
-}
-
-func TestOpenStreamShouldRetryWhenSendMsgBlocks(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	responseChan := make(chan *v2.DiscoveryResponse)
-	var first int32 = 0
-	response2 := &v2.DiscoveryResponse{VersionInfo: "2"}
-	client := createMockClientWithResponse(ctx, time.Nanosecond, 0*time.Second, responseChan, func(m interface{}) error {
-		if atomic.CompareAndSwapInt32(&first, 0, 1) {
-			<-ctx.Done()
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
-			responseChan <- response2
-			return nil
-		}
-	}, stats.NewMockScope("mock"))
-
-	respCh, done := client.OpenStream(transport.NewRequestV2(&v2.DiscoveryRequest{
-		TypeUrl: resource.ListenerType,
-		Node:    &core.Node{},
-	}), "aggregated_key")
-	resp, ok := <-respCh
-	assert.True(t, ok)
-	assert.Equal(t, resp.Get().V2.VersionInfo, response2.VersionInfo)
-
-	done()
-	cancel()
-	blockUntilClean(respCh, func() {})
 }
 
 func TestOpenStreamShouldRetryWhenSendMsgBlocksV3(t *testing.T) {
@@ -743,50 +403,6 @@ func TestCallOptions_getStreamTimeout(t *testing.T) {
 			}
 		})
 	}
-}
-
-func createMockClient(ctx context.Context) Client {
-	return NewMock(
-		ctx,
-		CallOptions{
-			SendTimeout:   time.Nanosecond,
-			StreamTimeout: 0 * time.Second,
-		},
-		nil,
-		make(chan *v2.DiscoveryResponse),
-		make(chan *v2.DiscoveryResponse),
-		make(chan *v2.DiscoveryResponse),
-		make(chan *v2.DiscoveryResponse),
-		func(m interface{}) error { return nil },
-		stats.NewMockScope("mock"))
-}
-
-func createMockClientWithError(ctx context.Context, scope tally.Scope) Client {
-	return NewMock(
-		ctx,
-		CallOptions{
-			SendTimeout:   time.Nanosecond,
-			StreamTimeout: 0 * time.Second,
-		},
-		[]error{fmt.Errorf("error")},
-		make(chan *v2.DiscoveryResponse),
-		make(chan *v2.DiscoveryResponse),
-		make(chan *v2.DiscoveryResponse),
-		make(chan *v2.DiscoveryResponse),
-		func(m interface{}) error { return nil },
-		scope)
-}
-
-func createMockClientWithResponse(
-	ctx context.Context,
-	sendTimeout time.Duration,
-	streamTimeout time.Duration,
-	r chan *v2.DiscoveryResponse,
-	sendCb func(m interface{}) error,
-	scope tally.Scope,
-) Client {
-	return NewMock(ctx, CallOptions{SendTimeout: sendTimeout, StreamTimeout: streamTimeout},
-		nil, r, r, r, r, sendCb, scope)
 }
 
 func createMockClientV3(ctx context.Context) Client {

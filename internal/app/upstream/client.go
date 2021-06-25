@@ -11,12 +11,10 @@ import (
 	"github.com/envoyproxy/xds-relay/internal/app/metrics"
 	"github.com/envoyproxy/xds-relay/internal/app/transport"
 
-	v2 "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	clusterservice "github.com/envoyproxy/go-control-plane/envoy/service/cluster/v3"
 	endpointservice "github.com/envoyproxy/go-control-plane/envoy/service/endpoint/v3"
 	listenerservice "github.com/envoyproxy/go-control-plane/envoy/service/listener/v3"
 	routeservice "github.com/envoyproxy/go-control-plane/envoy/service/route/v3"
-	"github.com/envoyproxy/go-control-plane/pkg/resource/v2"
 	resourcev3 "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	"github.com/envoyproxy/xds-relay/internal/pkg/log"
 	"github.com/envoyproxy/xds-relay/internal/pkg/util"
@@ -56,10 +54,6 @@ type Client interface {
 }
 
 type client struct {
-	ldsClient   v2.ListenerDiscoveryServiceClient
-	rdsClient   v2.RouteDiscoveryServiceClient
-	edsClient   v2.EndpointDiscoveryServiceClient
-	cdsClient   v2.ClusterDiscoveryServiceClient
 	ldsClientV3 listenerservice.ListenerDiscoveryServiceClient
 	rdsClientV3 routeservice.RouteDiscoveryServiceClient
 	edsClientV3 endpointservice.EndpointDiscoveryServiceClient
@@ -131,11 +125,6 @@ func New(
 
 	go updateConnectivityMetric(ctx, conn, subScope)
 
-	ldsClient := v2.NewListenerDiscoveryServiceClient(conn)
-	rdsClient := v2.NewRouteDiscoveryServiceClient(conn)
-	edsClient := v2.NewEndpointDiscoveryServiceClient(conn)
-	cdsClient := v2.NewClusterDiscoveryServiceClient(conn)
-
 	ldsClientV3 := listenerservice.NewListenerDiscoveryServiceClient(conn)
 	rdsClientV3 := routeservice.NewRouteDiscoveryServiceClient(conn)
 	edsClientV3 := endpointservice.NewEndpointDiscoveryServiceClient(conn)
@@ -145,10 +134,6 @@ func New(
 	go shutDown(ctx, conn, shutdownSignal)
 
 	return &client{
-		ldsClient:   ldsClient,
-		rdsClient:   rdsClient,
-		edsClient:   edsClient,
-		cdsClient:   cdsClient,
 		ldsClientV3: ldsClientV3,
 		rdsClientV3: rdsClientV3,
 		edsClientV3: edsClientV3,
@@ -221,22 +206,6 @@ func (m *client) handleStreamsWithRetry(
 			return
 		default:
 			switch request.GetTypeURL() {
-			case resource.ListenerType:
-				s, err = m.ldsClient.StreamListeners(childCtx)
-				stream = transport.NewStreamV2(s, request, m.logger)
-				scope = m.scope.SubScope(metrics.ScopeUpstreamLDS)
-			case resource.ClusterType:
-				s, err = m.cdsClient.StreamClusters(childCtx)
-				stream = transport.NewStreamV2(s, request, m.logger)
-				scope = m.scope.SubScope(metrics.ScopeUpstreamCDS)
-			case resource.RouteType:
-				s, err = m.rdsClient.StreamRoutes(childCtx)
-				stream = transport.NewStreamV2(s, request, m.logger)
-				scope = m.scope.SubScope(metrics.ScopeUpstreamRDS)
-			case resource.EndpointType:
-				s, err = m.edsClient.StreamEndpoints(childCtx)
-				stream = transport.NewStreamV2(s, request, m.logger)
-				scope = m.scope.SubScope(metrics.ScopeUpstreamEDS)
 			case resourcev3.ListenerType:
 				s, err = m.ldsClientV3.StreamListeners(childCtx)
 				stream = transport.NewStreamV3(s, request, m.logger)
