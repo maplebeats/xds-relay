@@ -6,11 +6,11 @@ replace github.com/spf13/viper => github.com/spf13/viper v1.7.1
 
 require (
 	github.com/cactus/go-statsd-client/statsd v0.0.0-20200322202804-24fc78943200
-	github.com/envoyproxy/go-control-plane v0.9.7-0.20200812194826-9821e2beedf6
+	github.com/envoyproxy/go-control-plane v0.9.9
 	github.com/envoyproxy/protoc-gen-validate v0.3.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e
-	github.com/golang/protobuf v1.4.2
+	github.com/golang/protobuf v1.5.2
 	github.com/iancoleman/strcase v0.1.3 // indirect
 	github.com/lyft/protoc-gen-star v0.5.2 // indirect
 	github.com/onsi/ginkgo v1.12.0
@@ -21,7 +21,7 @@ require (
 	go.uber.org/goleak v1.1.0
 	go.uber.org/zap v1.14.0
 	golang.org/x/tools v0.0.0-20200527150044-688b3c5d9fa5 // indirect
-	google.golang.org/genproto v0.0.0-20191108220845-16a3f7862a1a
-	google.golang.org/grpc v1.27.1
-	google.golang.org/protobuf v1.23.0
+	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013
+	google.golang.org/grpc v1.36.0
+	google.golang.org/protobuf v1.26.0
 )

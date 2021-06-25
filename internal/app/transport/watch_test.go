@@ -3,13 +3,9 @@ package transport
 import (
 	"sync"
 
-	discoveryv2 "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	cachev2 "github.com/envoyproxy/go-control-plane/pkg/cache/v2"
-	gcp "github.com/envoyproxy/go-control-plane/pkg/cache/v2"
 	cachev3 "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	gcpv3 "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
-	resourcev2 "github.com/envoyproxy/go-control-plane/pkg/resource/v2"
 	resourcev3 "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -25,13 +21,9 @@ const (
 	V3
 )
 
-var discoveryResponsev2 = &discoveryv2.DiscoveryResponse{}
 var discoveryResponsev3 = &discoveryv3.DiscoveryResponse{}
-var discoveryResponse2v2 = &discoveryv2.DiscoveryResponse{TypeUrl: resourcev2.ListenerType}
 var discoveryResponse2v3 = &discoveryv3.DiscoveryResponse{TypeUrl: resourcev3.ListenerType}
-var discoveryRequestv2 = &gcp.Request{}
 var discoveryRequestv3 = &gcpv3.Request{}
-var discoveryRequest2v2 = &gcp.Request{TypeUrl: resourcev2.ListenerType}
 var discoveryRequest2v3 = &gcpv3.Request{TypeUrl: resourcev3.ListenerType}
 var mockScope = stats.NewMockScope("mockwatch")
 
@@ -46,7 +38,6 @@ var _ = Describe("TestWatch", func() {
 		w.Close()
 		wg.Wait()
 	}, []TableEntry{
-		Entry("V2", newWatchV2(mockScope), V2),
 		Entry("V3", newWatchV3(mockScope), V3),
 	}...)
 
@@ -65,12 +56,6 @@ var _ = Describe("TestWatch", func() {
 		}()
 		wg.Wait()
 	}, []TableEntry{
-		Entry(
-			"V2",
-			newWatchV2(mockScope),
-			NewResponseV2(discoveryRequestv2, discoveryResponsev2),
-			&cachev2.PassthroughResponse{DiscoveryResponse: discoveryResponsev2, Request: discoveryRequestv2},
-			V2),
 		Entry(
 			"V3",
 			newWatchV3(mockScope),
@@ -91,7 +76,6 @@ var _ = Describe("TestWatch", func() {
 		go sendWithCloseChannelOnFailure(w, &wg, resp)
 		wg.Wait()
 	}, []TableEntry{
-		Entry("V2", newWatchV2(mockScope), NewResponseV2(discoveryRequestv2, discoveryResponsev2)),
 		Entry("V3", newWatchV3(mockScope), NewResponseV3(discoveryRequestv3, discoveryResponsev3)),
 	}...)
 
@@ -105,12 +89,6 @@ var _ = Describe("TestWatch", func() {
 		verifyChannelState(v, expected, true, w)
 		verifyChannelState(v, nil, false, w)
 	}, []TableEntry{
-		Entry(
-			"V2",
-			newWatchV2(mockScope),
-			NewResponseV2(discoveryRequestv2, discoveryResponsev2),
-			&cachev2.PassthroughResponse{DiscoveryResponse: discoveryResponsev2, Request: discoveryRequestv2},
-			V2),
 		Entry(
 			"V3",
 			newWatchV3(mockScope),
@@ -134,13 +112,6 @@ var _ = Describe("TestWatch", func() {
 		verifyChannelState(v, expected, true, w)
 	}, []TableEntry{
 		Entry(
-			"V2",
-			newWatchV2(mockScope),
-			NewResponseV2(discoveryRequestv2, discoveryResponsev2),
-			NewResponseV2(discoveryRequest2v2, discoveryResponse2v2),
-			&cachev2.PassthroughResponse{DiscoveryResponse: discoveryResponse2v2, Request: discoveryRequest2v2},
-			V2),
-		Entry(
 			"V3",
 			newWatchV3(mockScope),
 			NewResponseV3(discoveryRequestv3, discoveryResponsev3),
@@ -163,8 +134,6 @@ func verifyChannelState(v version, expectedResponse interface{}, expectedMore bo
 	more := false
 
 	switch v {
-	case V2:
-		got, more = <-w.GetChannel().V2
 	case V3:
 		got, more = <-w.GetChannel().V3
 	}
